@@ -54,6 +54,6 @@ export default async function setup(){
 
     // Assuming chooseFile is an asynchronous function, await it
     let file = await chooseFile(csvFiles, textString);
-    
+    rl.close();
     return [threads, file];
 }

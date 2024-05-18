@@ -10,21 +10,28 @@ function processData(rows, columns) {
         let object = {};
         const rowData = row.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
         for(let i = 0; i < columns.length; i++){
+            let thisColumn = columns[i];
+            if(thisColumn === "id") thisColumn = "_id";
             if(rowData[i] != null) {
                 let removedQuotation = rowData[i].replace(/"/g, '');
-                if(!isNaN(parseInt(removedQuotation)) && Number.isInteger(removedQuotation))
-                    object[columns[i]] = parseInt(removedQuotation);
-                if(!isNaN(parseFloat(removedQuotation)))
-                    object[columns[i]] = parseFloat(removedQuotation);
+                removedQuotation = rowData[i].replace(/\r/g, '');
+
+                if(typeof(rowData[i]) === 'string')
+                    object[thisColumn] = rowData[i]
+                else if(!isNaN(parseInt(removedQuotation)) && Number.isInteger(removedQuotation)){
+                    object[thisColumn] = parseInt(removedQuotation);
+                }
+                else if(!isNaN(parseFloat(removedQuotation)))
+                    object[thisColumn] = parseFloat(removedQuotation);
                 else if(removedQuotation === true || removedQuotation === false)
-                    object[columns[i]] = Boolean(removedQuotation);
+                    object[thisColumn] = Boolean(removedQuotation);
                 else {
                     let potentialDate = new Date(removedQuotation);
                     if(!isNaN(potentialDate.getTime()))
-                        object[columns[i]] = potentialDate;
-                    else
-                        object[columns[i]] = removedQuotation;
-                }
+                        object[thisColumn] = potentialDate;
+                    else 
+                        object[thisColumn] = "";
+                    }
             }    
         }
         if(!object.hasOwnProperty("gram_weight") || !isNaN(parseFloat(object.gram_weight)))
