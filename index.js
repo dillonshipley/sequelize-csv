@@ -2,7 +2,6 @@ import { readCSV, reprocessData } from "./process.js";
 import {defineModel, detectColumns} from './ModelBuilder.js'
 
 import cluster from "cluster";
-import os  from 'os';
 
 function waitForWorkerMessage(worker) {
     return new Promise((resolve) => {
@@ -25,27 +24,12 @@ export default async function run(threads, filename, dbConnection){
         let sampleData = csv_data.slice(0, 100);
         let columnDefinitions = detectColumns(sampleData, columns);
         let finalData = reprocessData(csv_data, columnDefinitions);
-
+        finalData = finalData.slice(0, 100);
         let newModel = await defineModel(filename, columnDefinitions, dbConnection);
+        
         await newModel.drop();
         await newModel.sync();
 
-        /* TESTING MODEL GENERATION - DELETE LATER */
-        /*
-        let count = 0;
-            for(var row of csv_data.slice(0, 5000)){
-                count++;
-                if(count % 100 == 0)
-                    console.log(count);
-                try{
-                    await newModel.build(row).validate();
-                    await newModel.create(row);
-                } catch (error){
-                    console.log("couldn't insert " + row._id)
-                    console.log(error);
-                }  
-            }*/
-        /* END OF TESTING MODEL GENERATION */
         let chunkLength = Math.trunc(finalData.length / threads);
         let remainder = csv_data.length % threads;
         
