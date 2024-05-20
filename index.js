@@ -1,14 +1,8 @@
-import cluster from 'cluster';
-import setup from './setup.js';
-import {readCSV, reprocessData} from './process.js'
-import moment from 'moment';
-import {DataTypes, col} from 'sequelize';
-import { sequelize } from "./dbConnection.js";
-import { format } from 'path';
+import { readCSV, reprocessData } from "./process.js";
+import {defineModel, detectColumns} from './ModelBuilder.js'
 
-
-import { defineModel, detectColumns } from './ModelBuilder.js';
-
+import cluster from "cluster";
+import os  from 'os';
 
 function waitForWorkerMessage(worker) {
     return new Promise((resolve) => {
@@ -22,13 +16,9 @@ function waitForWorkerMessage(worker) {
     });
 }
 
-async function run(){
+export default async function run(threads, filename, dbConnection){
     if (cluster.isPrimary) {
-        let values = await setup();
-        let threads = values[0];
-        let filename = values[1];
-
-        let processedData = await readCSV(values[1]);
+        let processedData = await readCSV(filename);
         let columns = processedData[0];
         let csv_data = processedData[1];
         
@@ -36,7 +26,7 @@ async function run(){
         let columnDefinitions = detectColumns(sampleData, columns);
         let finalData = reprocessData(csv_data, columnDefinitions);
 
-        let newModel = await defineModel(filename, columnDefinitions);
+        let newModel = await defineModel(filename, columnDefinitions, dbConnection);
         await newModel.drop();
         await newModel.sync();
 
@@ -60,20 +50,20 @@ async function run(){
         let remainder = csv_data.length % threads;
         
         let numComplete = 0;
-        for (let i = 0; i < values[0]; i++) {
+        for (let i = 0; i < threads; i++) {
             let chunk = null;
-            if(i == values[0] - 1)
+            if(i == threads - 1)
                 chunk = finalData.slice(i * chunkLength, ((i + 1) * chunkLength) + remainder)
             else                 
                 chunk = finalData.slice(i * chunkLength, (i + 1) * chunkLength);
             let worker = cluster.fork();
             waitForWorkerMessage(worker).then((msg) => {
                 if(msg === "send")
-                    worker.send({ chunk: chunk, filename: values[1], columnDefinitions: columnDefinitions});
+                    worker.send({ chunk: chunk, filename: filename, columnDefinitions: columnDefinitions});
                 waitForWorkerMessage(worker).then((msg) => {
                     if(msg == "complete")
                         numComplete++;
-                    if(numComplete == values[0]){
+                    if(numComplete == threads){
                         console.log('\x1b[32m%s\x1b[0m', "CSV file successfully loaded")
                         cluster.disconnect(() => {
                             console.log('\x1b[32m%s\x1b[0m', 'Cluster disconnected');
@@ -87,7 +77,7 @@ async function run(){
         }
     } else if (cluster.isWorker){
         process.on('message', async (msg) => {
-            let newModel = await defineModel(msg.filename, msg.columnDefinitions);
+            let newModel = await defineModel(msg.filename, msg.columnDefinitions, dbConnection);
             let count = 0;
             for(var row of msg.chunk){
                 count++;
@@ -107,9 +97,4 @@ async function run(){
         });
         process.send({type: 'worker-ready', message: 'Worker is ready'});
     }
-    
 }
-
-
-await run();
-
