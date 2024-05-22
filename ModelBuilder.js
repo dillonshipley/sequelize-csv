@@ -2,28 +2,28 @@ import moment from "moment";
 import { DataTypes } from "sequelize";
 
 // Define a function to create dynamic model
-export function defineModel(modelName, columnDefinitions, dbConnection) {
-    for (let column in columnDefinitions) {
-        switch(columnDefinitions[column].type){
+export function defineModel(columnDefinitions) {
+    let newColumnDefintions = JSON.parse(JSON.stringify(columnDefinitions));
+    for (let column in newColumnDefintions) {
+        switch(newColumnDefintions[column].type){
             case "string":
-                columnDefinitions[column].type = DataTypes.STRING;
+                newColumnDefintions[column].type = DataTypes.STRING;
                 break;
             case "date":
-                columnDefinitions[column].type = DataTypes.DATE;
+                newColumnDefintions[column].type = DataTypes.DATE;
                 break;
             case "boolean":
-                columnDefinitions[column].type = DataTypes.BOOLEAN;
+                newColumnDefintions[column].type = DataTypes.BOOLEAN;
                 break;
             case "int":
-                columnDefinitions[column].type = DataTypes.INTEGER;
+                newColumnDefintions[column].type = DataTypes.INTEGER;
                 break;
             case "float":
-                columnDefinitions[column].type = DataTypes.FLOAT;
+                newColumnDefintions[column].type = DataTypes.FLOAT;
                 break;
         }
     }
-    const Model = dbConnection.define(modelName, columnDefinitions);
-    return Model;
+    return newColumnDefintions;
 }
 
 export function detectColumns(sample, columns){

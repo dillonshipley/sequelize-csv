@@ -1,7 +1,16 @@
 import { readCSV, reprocessData } from "./process.js";
 import {defineModel, detectColumns} from './ModelBuilder.js'
+import { fileURLToPath } from 'url';
+import { Worker} from "worker_threads";
 
+import {Sequelize} from 'sequelize';
+
+import { dirname } from "path";
 import cluster from "cluster";
+let __dirname = dirname(fileURLToPath(import.meta.url));
+
+const workerPath = `${__dirname}/WorkerFunction.js`;
+
 
 function waitForWorkerMessage(worker) {
     return new Promise((resolve) => {
@@ -15,18 +24,22 @@ function waitForWorkerMessage(worker) {
     });
 }
 
-export default async function run(threads, filename, dbConnection){
+export default async function run(threads, filename, dbJSON){
     if (cluster.isPrimary) {
         let processedData = await readCSV(filename);
+        if(processedData[0] === 0)
+            return;
         let columns = processedData[0];
         let csv_data = processedData[1];
         
         let sampleData = csv_data.slice(0, 100);
         let columnDefinitions = detectColumns(sampleData, columns);
         let finalData = reprocessData(csv_data, columnDefinitions);
-        finalData = finalData.slice(0, 100);
-        let newModel = await defineModel(filename, columnDefinitions, dbConnection);
+        let newColumnDefintions = await defineModel(columnDefinitions);
         
+        const dbConnection = new Sequelize(dbJSON);
+        const newModel = dbConnection.define(filename, newColumnDefintions, {freezeTableName: true});
+
         await newModel.drop();
         await newModel.sync();
 
@@ -40,18 +53,18 @@ export default async function run(threads, filename, dbConnection){
                 chunk = finalData.slice(i * chunkLength, ((i + 1) * chunkLength) + remainder)
             else                 
                 chunk = finalData.slice(i * chunkLength, (i + 1) * chunkLength);
-            let worker = cluster.fork();
+            let worker = new Worker(workerPath, {type: "module"})
             waitForWorkerMessage(worker).then((msg) => {
                 if(msg === "send")
-                    worker.send({ chunk: chunk, filename: filename, columnDefinitions: columnDefinitions});
+                    worker.postMessage({ chunk: chunk, filename: filename, columnDefinitions: columnDefinitions, dbJSON: dbJSON});
                 waitForWorkerMessage(worker).then((msg) => {
                     if(msg == "complete")
                         numComplete++;
+                        worker.terminate()
+                            .catch((error) => console.error('Error terminating worker:', error));
                     if(numComplete == threads){
-                        console.log('\x1b[32m%s\x1b[0m', "CSV file successfully loaded")
-                        cluster.disconnect(() => {
-                            console.log('\x1b[32m%s\x1b[0m', 'Cluster disconnected');
-                        });
+                        console.log('\x1b[32m%s\x1b[0m', `CSV file successfully loaded. Check your database for the table ${newModel.getTableName()}`);
+                        console.log('Shutting down threads');
                         return;
                     }
                 });
@@ -59,26 +72,5 @@ export default async function run(threads, filename, dbConnection){
             });
             
         }
-    } else if (cluster.isWorker){
-        process.on('message', async (msg) => {
-            let newModel = await defineModel(msg.filename, msg.columnDefinitions, dbConnection);
-            let count = 0;
-            for(var row of msg.chunk){
-                count++;
-                if(count % 100 == 0)
-                    console.log(count);
-                try{
-                    await newModel.build(row).validate();
-                    await newModel.create(row);
-                } catch (error){
-                    console.log("couldn't insert" + row._id)
-                    console.log(error);
-                }  
-            }
-
-            process.send({type: 'complete', message: ''});
-            process.exit();
-        });
-        process.send({type: 'worker-ready', message: 'Worker is ready'});
     }
 }

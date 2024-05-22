@@ -63,18 +63,21 @@ export function reprocessData(csv_data, columnDefinitions){
 }
 
 export async function readCSV(filename){
-    const data = await fs.readFile('./' + filename + '.csv', 'utf-8');
-    //Derive the columns from the first row of the csv file
-    const allRows = data.split('\n');
-    var columns = allRows[0].split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
-    for(let i = 0; i < columns.length; i++)
-        columns[i] = columns[i].replace(/"/g, '').replace(/\r/g, '');
-    allRows.shift();
-
-    //convert the data into more standard looking objects
-    const rows = processData(allRows, columns);
-        //add a database model based on the columns of the csv
-    return [columns, rows];
-        
-
+    try {
+        const data = await fs.readFile('./' + filename + '.csv', 'utf-8');
+        //Derive the columns from the first row of the csv file
+        const allRows = data.split('\n');
+        var columns = allRows[0].split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
+        for(let i = 0; i < columns.length; i++)
+            columns[i] = columns[i].replace(/"/g, '').replace(/\r/g, '');
+        allRows.shift();
+    
+        //convert the data into more standard looking objects
+        const rows = processData(allRows, columns);
+            //add a database model based on the columns of the csv
+        return [columns, rows];
+    } catch(error){
+        console.log('\x1b[31m%s\x1b[0m', `${filename} could not be found in your current folder. Please try again.`)
+        return [0, 0];
+    }
 };
