@@ -11,9 +11,6 @@ function WorkerFunction() {
         let count = 0;
         for (let row of msg.chunk) {
             count++;
-            if (count % 100 == 0) {
-                console.log(count);
-            }
             try {
                 await newModel.build(row).validate();
                 await newModel.create(row);

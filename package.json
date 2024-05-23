@@ -1,7 +1,7 @@
 {
   "type": "module",
   "name": "sequelize-csv-auto",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "A multithreaded Javascript CSV to Sequelize Processor",
   "main": "index.js",
   "scripts": {
